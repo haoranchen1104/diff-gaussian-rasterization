@@ -2,3 +2,5 @@ build/
 diff_gaussian_rasterization.egg-info/
 dist/
 _C.cpython*
+__pycache__/
+*.pyc
