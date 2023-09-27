@@ -11,6 +11,7 @@
 
 #include "backward.h"
 #include "auxiliary.h"
+#include "config.h"
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 namespace cg = cooperative_groups;
@@ -409,9 +410,11 @@ renderCUDA(
 	const float* __restrict__ final_Ts,
 	const uint32_t* __restrict__ n_contrib,
 	const float* __restrict__ dL_dpixels,
+	const float* __restrict__ dL_dout_feature,
 	float3* __restrict__ dL_dmean2D,
 	float4* __restrict__ dL_dconic2D,
 	float* __restrict__ dL_dopacity,
+	float* __restrict__ dL_dinstance_feature,
 	float* __restrict__ dL_dcolors)
 {
 	// We rasterize again. Compute necessary block info.
@@ -454,6 +457,13 @@ renderCUDA(
 
 	float last_alpha = 0;
 	float last_color[C] = { 0 };
+
+	// Gradient of instance features
+	float dL_doutf[FEATURE_DIM];
+	if (inside)
+		for (int i = 0; i < FEATURE_DIM; i++)
+			dL_doutf[i] = dL_dout_feature[i * H * W + pix_id];
+
 
 	// Gradient of pixel coordinate w.r.t. normalized 
 	// screen-space viewport corrdinates (-1 to 1)
@@ -503,11 +513,16 @@ renderCUDA(
 			T = T / (1.f - alpha);
 			const float dchannel_dcolor = alpha * T;
 
+			const int global_id = collected_id[j];
+
+			// Propagate gradients to per-Gaussian instance features
+			for (int fd = 0; fd < FEATURE_DIM; fd++)
+				atomicAdd(&(dL_dinstance_feature[global_id * FEATURE_DIM + fd]), alpha * T * dL_doutf[fd]);
+
 			// Propagate gradients to per-Gaussian colors and keep
 			// gradients w.r.t. alpha (blending factor for a Gaussian/pixel
 			// pair).
 			float dL_dalpha = 0.0f;
-			const int global_id = collected_id[j];
 			for (int ch = 0; ch < C; ch++)
 			{
 				const float c = collected_colors[ch * BLOCK_SIZE + j];
@@ -633,9 +648,11 @@ void BACKWARD::render(
 	const float* final_Ts,
 	const uint32_t* n_contrib,
 	const float* dL_dpixels,
+	const float* dL_dout_feature,
 	float3* dL_dmean2D,
 	float4* dL_dconic2D,
 	float* dL_dopacity,
+	float* dL_dinstance_feature,
 	float* dL_dcolors)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> >(
@@ -649,9 +666,11 @@ void BACKWARD::render(
 		final_Ts,
 		n_contrib,
 		dL_dpixels,
+		dL_dout_feature,
 		dL_dmean2D,
 		dL_dconic2D,
 		dL_dopacity,
+		dL_dinstance_feature,
 		dL_dcolors
 		);
 }

@@ -39,6 +39,7 @@ namespace CudaRasterizer
 			const float* shs,
 			const float* colors_precomp,
 			const float* opacities,
+			const float* instance_features,
 			const float* scales,
 			const float scale_modifier,
 			const float* rotations,
@@ -49,6 +50,7 @@ namespace CudaRasterizer
 			const float tan_fovx, float tan_fovy,
 			const bool prefiltered,
 			float* out_color,
+			float* out_feature,
 			int* radii = nullptr,
 			bool debug = false);
 
@@ -72,9 +74,11 @@ namespace CudaRasterizer
 			char* binning_buffer,
 			char* image_buffer,
 			const float* dL_dpix,
+			const float* dL_dout_feature,
 			float* dL_dmean2D,
 			float* dL_dconic,
 			float* dL_dopacity,
+			float* dL_dinstance_feature,
 			float* dL_dcolor,
 			float* dL_dmean3D,
 			float* dL_dcov3D,

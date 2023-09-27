@@ -11,6 +11,7 @@
 
 #include "forward.h"
 #include "auxiliary.h"
+#include "config.h"
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 namespace cg = cooperative_groups;
@@ -267,10 +268,12 @@ renderCUDA(
 	const float2* __restrict__ points_xy_image,
 	const float* __restrict__ features,
 	const float4* __restrict__ conic_opacity,
+	const float* __restrict__ instance_features,
 	float* __restrict__ final_T,
 	uint32_t* __restrict__ n_contrib,
 	const float* __restrict__ bg_color,
-	float* __restrict__ out_color)
+	float* __restrict__ out_color,
+	float* __restrict__ out_feature)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -354,6 +357,9 @@ renderCUDA(
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
 
+			for (int fd = 0; fd < FEATURE_DIM; fd++)
+				out_feature[fd * H * W + pix_id] += instance_features[collected_id[j] * FEATURE_DIM + fd] * alpha * T;
+
 			T = test_T;
 
 			// Keep track of last range entry to update this
@@ -381,10 +387,12 @@ void FORWARD::render(
 	const float2* means2D,
 	const float* colors,
 	const float4* conic_opacity,
+	const float* instance_features,
 	float* final_T,
 	uint32_t* n_contrib,
 	const float* bg_color,
-	float* out_color)
+	float* out_color,
+	float* out_feature)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -393,10 +401,12 @@ void FORWARD::render(
 		means2D,
 		colors,
 		conic_opacity,
+		instance_features,
 		final_T,
 		n_contrib,
 		bg_color,
-		out_color);
+		out_color,
+		out_feature);
 }
 
 void FORWARD::preprocess(int P, int D, int M,
